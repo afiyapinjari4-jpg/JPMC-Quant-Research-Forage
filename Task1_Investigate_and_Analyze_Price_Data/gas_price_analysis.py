@@ -2,114 +2,68 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
 
+gas_data = pd.read_csv("Nat_Gas.csv")
 
-
-df = pd.read_csv("Nat_Gas.csv")
-
-
-df["Dates"] = pd.to_datetime(df["Dates"], format="%m/%d/%y")
-
-
-df = df.sort_values("Dates")
-
+gas_data["Dates"] = pd.to_datetime(gas_data["Dates"], format="%m/%d/%y")
+gas_data = gas_data.sort_values("Dates")
 
 print("First 5 rows of the dataset:")
-print(df.head())
+print(gas_data.head())
 
+date_values = gas_data["Dates"].map(pd.Timestamp.toordinal)
 
-plt.figure(figsize=(12, 5))
-plt.plot(df["Dates"], df["Prices"], marker="o", label="Historical Prices")
-plt.title("Natural Gas Prices")
-plt.xlabel("Date")
-plt.ylabel("Price")
-plt.grid(True)
-plt.legend()
-plt.show()
-
-
-date_numbers = df["Dates"].map(pd.Timestamp.toordinal)
-
-price_function = interp1d(
-    date_numbers,
-    df["Prices"],
+price_estimator = interp1d(
+    date_values,
+    gas_data["Prices"],
     kind="linear",
     fill_value="extrapolate"
 )
 
+def estimate_gas_price(date):
+    date = pd.to_datetime(date)
+    return float(price_estimator(date.toordinal()))
 
-monthly_avg = df.groupby(df["Dates"].dt.month)["Prices"].mean()
+sample_dates = [
+    "2023-05-15",
+    "2025-03-20"
+]
 
-trend = (df["Prices"].iloc[-1] - df["Prices"].iloc[-13]) / 12
+print("\nEstimated Prices")
+print("-------------------------")
 
-
-last_date = df["Dates"].max()
+for date in sample_dates:
+    price = estimate_gas_price(date)
+    print(f"{date} : {price:.2f}")
 
 future_dates = pd.date_range(
-    start=last_date + pd.offsets.MonthEnd(1),
-    periods=12,
+    start="2024-10-31",
+    end="2025-09-30",
     freq="ME"
 )
 
-future_prices = []
+future_prices = [
+    estimate_gas_price(date)
+    for date in future_dates
+]
 
-for i, d in enumerate(future_dates):
-    seasonal_price = monthly_avg[d.month]
-    estimated_price = seasonal_price + trend * (i + 1)
-    future_prices.append(estimated_price)
-
-future_df = pd.DataFrame({
-    "Dates": future_dates,
-    "Prices": future_prices
-})
-
-
-
-combined = pd.concat([df, future_df], ignore_index=True)
-
-combined_dates = combined["Dates"].map(pd.Timestamp.toordinal)
-
-combined_function = interp1d(
-    combined_dates,
-    combined["Prices"],
-    kind="linear",
-    fill_value="extrapolate"
-)
-
-
-
-def estimate_price(date):
-    """
-    Returns estimated natural gas price for any date.
-    Example:
-        estimate_price("2025-03-20")
-    """
-    d = pd.to_datetime(date)
-    return round(float(combined_function(d.toordinal())), 2)
-
-
-
-print("\nEstimated Prices")
-print("----------------------------")
-print("2023-05-15 :", estimate_price("2023-05-15"))
-print("2025-03-20 :", estimate_price("2025-03-20"))
-
-plt.figure(figsize=(12, 5))
+plt.figure(figsize=(10, 5))
 
 plt.plot(
-    df["Dates"],
-    df["Prices"],
+    gas_data["Dates"],
+    gas_data["Prices"],
     marker="o",
-    label="Historical"
+    label="Historical Prices"
 )
 
 plt.plot(
-    future_df["Dates"],
-    future_df["Prices"],
+    future_dates,
+    future_prices,
     marker="o",
-    label="Forecast"
+    linestyle="--",
+    label="Estimated Prices"
 )
 
-plt.title("Historical and Forecast Gas Prices")
+plt.title("Natural Gas Prices")
 plt.xlabel("Date")
 plt.ylabel("Price")
 plt.legend()
